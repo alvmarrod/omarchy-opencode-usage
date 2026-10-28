@@ -8,10 +8,10 @@ the go/v1/usage API.
 Plugin ID: `io.github.thespd.opencode-tracker`
 
 > This checkout is a local fork (`alvmarrod/opencode-tracker`) that adds
-> OpenCode V2 support: usage comes from `opencode stats --json`, and OAuth
-> device logins are read from the `credential` table in `opencode.db`
-> instead of the removed V1 `auth.json`. Legacy V1 databases and
-> `auth.json` keys still work as fallbacks.
+> OpenCode V2 support: usage is read per message from the `session_message`
+> table (the V1 `message` shape is still supported), and OAuth device
+> logins are read from the `credential` table in `opencode.db` instead of
+> the removed V1 `auth.json`.
 
 ## Install
 
@@ -34,11 +34,6 @@ Removes the plugin files and takes the bar widget with it:
 
 ## Dependencies
 
-- `opencode` — the OpenCode CLI (v2). The collector prefers
-  `opencode stats --days N --models --json`, OpenCode's supported usage
-  interface, which needs the local OpenCode background server. If that is
-  unavailable it reads the database directly, so the widget still works
-  offline.
 - `sqlite3` — reads OpenCode's local database (`~/.local/share/opencode/opencode.db`, read-only).
 - `jq` — assembles the collector JSON output.
 - `curl` — queries the OpenCode Go usage API (`https://opencode.ai/zen/go/v1/usage`).
@@ -60,8 +55,8 @@ script runs under a cleared environment.
 - `Panel.qml` — bar widget entry point
 - `Service.qml` — refresh service running `collector.sh` on a timer
 - `Model.js` — formatting and normalization helpers
-- `collector.sh` — collects provider tokens/cost from OpenCode (stats API or
-  database) and Go limit windows
+- `collector.sh` — collects per-message tokens/cost from OpenCode's database
+  and Go limit windows
 
 Edits under the installed plugin directory hot-reload; force a rescan with
 `omarchy-shell shell rescanPlugins` if needed.
