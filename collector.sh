@@ -111,8 +111,8 @@ resolve_opencode() {
     printf '%s' "$OPENCODE_BIN"
     return 0
   fi
-  for c in "$HOME/.local/bin/opencode" \
-           "$HOME/.local/share/mise/shims/opencode" \
+  for c in "$HOME/.local/share/mise/shims/opencode" \
+           "$HOME/.local/bin/opencode" \
            /usr/local/bin/opencode \
            /usr/bin/opencode; do
     if [[ -x $c ]]; then
