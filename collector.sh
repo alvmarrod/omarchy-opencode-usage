@@ -125,7 +125,8 @@ resolve_opencode() {
 opencode_bin=$(resolve_opencode) || opencode_bin=""
 
 # OAuth device credential from the V2 database (read-only). auth.json is not
-# written by OpenCode V2, so this is the primary key source now.
+# written by OpenCode V2, so this is the primary key source now. API keys
+# stored in the same table (value.key) are accepted as well.
 oauth_access=""
 oauth_expires=0
 has_oauth=0
@@ -134,7 +135,7 @@ if [[ -r $DB ]]; then
   credential_json=$("$SQLITE3" -readonly -cmd ".timeout 3000" "file:$DB?mode=ro" \
     "SELECT value FROM credential WHERE integration_id='opencode' AND active=1 ORDER BY time_updated DESC LIMIT 1;" 2>/dev/null) || credential_json=""
   if [[ -n $credential_json ]] && "$JQ" -e 'type == "object"' >/dev/null 2>&1 <<<"$credential_json"; then
-    oauth_access=$("$JQ" -r '.access // empty' <<<"$credential_json" 2>/dev/null) || oauth_access=""
+    oauth_access=$("$JQ" -r '.access // .key // empty' <<<"$credential_json" 2>/dev/null) || oauth_access=""
     oauth_expires=$("$JQ" -r '.expires // 0' <<<"$credential_json" 2>/dev/null) || oauth_expires=0
     [[ $oauth_expires =~ ^[0-9]+$ ]] || oauth_expires=0
   fi
