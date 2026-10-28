@@ -90,6 +90,7 @@ Item {
       PATH: "/usr/bin:/bin",
       OPENCODE_AUTH_JSON: null,
       OPENCODE_DB: null,
+      OPENCODE_BIN: null,
       COLLECTOR_PG_LEADER: "1"
     })
     workingDirectory: "/"

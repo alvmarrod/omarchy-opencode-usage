@@ -110,6 +110,7 @@ function countdown(resetMs, nowMs) {
 
 function tokenCount(value) {
   var amount = Math.max(0, number(value, 0))
+  if (amount >= 1000000000) return (amount / 1000000000).toFixed(amount >= 10000000000 ? 0 : 1).replace(/\.0$/, "") + "B"
   if (amount >= 1000000) return (amount / 1000000).toFixed(amount >= 100000000 ? 0 : 1).replace(/\.0$/, "") + "M"
   if (amount >= 1000) return (amount / 1000).toFixed(amount >= 100000 ? 0 : 1).replace(/\.0$/, "") + "K"
   return String(Math.round(amount))
