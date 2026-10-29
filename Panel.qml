@@ -8,8 +8,8 @@ import "Model.js" as Model
 
 Panel {
   id: root
-  moduleName: "io.github.thespd.opencode-tracker"
-  ipcTarget: "io.github.thespd.opencode-tracker"
+  moduleName: "io.github.alvmarrod.opencode-usage"
+  ipcTarget: "io.github.alvmarrod.opencode-usage"
 
   property double nowMs: Date.now()
   property string expandedProviderId: ""

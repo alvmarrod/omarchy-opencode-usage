@@ -1,35 +1,39 @@
-# opencode-tracker
+# omarchy-opencode-usage
 
 OpenCode usage widget for the Omarchy shell (Quickshell): token and cost
 usage per configured provider (Zen, Go, Bedrock, ...) from OpenCode, daily
 per-model breakdowns for the last 7 days, and OpenCode Go limit windows via
 the go/v1/usage API.
 
-Plugin ID: `io.github.thespd.opencode-tracker`
+Plugin ID: `io.github.alvmarrod.opencode-usage`
 
-> This checkout is a local fork (`alvmarrod/opencode-tracker`) that adds
-> OpenCode V2 support: usage is read per message from the `session_message`
-> table (the V1 `message` shape is still supported), and OAuth device
-> logins are read from the `credential` table in `opencode.db` instead of
-> the removed V1 `auth.json`.
+This repository continues the plugin with OpenCode V2 support:
+
+- usage is read per message from `session_message` (the V1 `message` shape is
+  still supported)
+- OAuth device logins are read from the `credential` table in `opencode.db`
+  instead of the removed V1 `auth.json` (plain API keys and `auth.json` are
+  still supported)
+- the 7/30-day windows are calendar-aligned with the panel's daily series and
+  with `opencode stats`
 
 ## Install
 
 Clone the repository into your Omarchy plugin directory and enable it:
 
-    omarchy plugin add https://github.com/alvmarrod/opencode-tracker
+    omarchy plugin add https://github.com/alvmarrod/omarchy-opencode-usage
 
 The command validates the plugin, enables it, and asks which bar section to
 place the widget in (default: right). For a non-interactive install that
 enables the widget with the default section:
 
-    omarchy plugin add https://github.com/alvmarrod/opencode-tracker --enable --yes
+    omarchy plugin add https://github.com/alvmarrod/omarchy-opencode-usage --enable --yes
 
 ## Remove
 
 Removes the plugin files and takes the bar widget with it:
 
-    omarchy plugin remove io.github.thespd.opencode-tracker
+    omarchy plugin remove io.github.alvmarrod.opencode-usage
 
 
 ## Dependencies
@@ -60,6 +64,18 @@ script runs under a cleared environment.
 
 Edits under the installed plugin directory hot-reload; force a rescan with
 `omarchy-shell shell rescanPlugins` if needed.
+
+## Lineage
+
+This is an independent continuation of:
+
+- [Dahep/omarchy-plugin-opencode-usage](https://github.com/Dahep/omarchy-plugin-opencode-usage)
+  — the original plugin
+- [NiloyTheSpd/opencode-tracker](https://github.com/NiloyTheSpd/opencode-tracker)
+  — the fork that added the hardened collector, the weekly budget, and related work
+
+Both are credited under the MIT license. This repository is not a GitHub
+fork of either project and is maintained independently.
 
 ## License
 
