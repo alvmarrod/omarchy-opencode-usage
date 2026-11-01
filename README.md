@@ -77,6 +77,10 @@ This is an independent continuation of:
 Both are credited under the MIT license. This repository is not a GitHub
 fork of either project and is maintained independently.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
 ## License
 
 MIT — see `LICENSE`.
