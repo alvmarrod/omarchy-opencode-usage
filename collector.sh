@@ -114,10 +114,8 @@ fi
 # Legacy auth.json keys (V1) and their provider ids.
 legacy_keys='[]'
 if [[ -r $AUTH_JSON ]]; then
-  while IFS= read -r k; do
-    [[ -n $k ]] || continue
-    legacy_keys=$("$JQ" -c --arg k "$k" '. + [$k]' <<<"$legacy_keys")
-  done < <("$JQ" -r 'to_entries[] | select(.value.key) | .key' "$AUTH_JSON" 2>/dev/null)
+  legacy_keys=$("$JQ" -c '[to_entries[] | select(.value.key) | .key]' "$AUTH_JSON" 2>/dev/null) || legacy_keys='[]'
+  [[ -n $legacy_keys ]] || legacy_keys='[]'
 fi
 
 # Resolve the Go bearer token: OAuth first, then the legacy opencode-go key.
@@ -198,13 +196,14 @@ if [[ -r $DB ]] && [[ -n $("$SQLITE3" -readonly -cmd ".timeout 3000" "file:$DB?m
 fi
 
 provider_rows() {
-  [[ -r $DB ]] || return
-  "$SQLITE3" -readonly -cmd ".timeout 3000" "file:$DB?mode=ro" \
-    "SELECT $PROVIDER_PATH,
-            ROUND(SUM(CASE WHEN time_created > $MONTH_CUTOFF THEN COALESCE($TOKENS_EXPR,0) ELSE 0 END)),
-            ROUND(SUM(CASE WHEN time_created > $CUTOFF THEN COALESCE($TOKENS_EXPR,0) ELSE 0 END)),
-            ROUND(SUM(CASE WHEN time_created > $MONTH_CUTOFF THEN COALESCE(json_extract(data,'\$.cost'),0) ELSE 0 END),4),
-            ROUND(SUM(CASE WHEN time_created > $CUTOFF THEN COALESCE(json_extract(data,'\$.cost'),0) ELSE 0 END),4)
+  local out
+  [[ -r $DB ]] || { echo '[]'; return; }
+  out=$("$SQLITE3" -readonly -cmd ".timeout 3000" -json "file:$DB?mode=ro" \
+    "SELECT $PROVIDER_PATH AS pid,
+            ROUND(SUM(CASE WHEN time_created > $MONTH_CUTOFF THEN COALESCE($TOKENS_EXPR,0) ELSE 0 END)) AS tokensMonth,
+            ROUND(SUM(CASE WHEN time_created > $CUTOFF THEN COALESCE($TOKENS_EXPR,0) ELSE 0 END)) AS tokensWeek,
+            ROUND(SUM(CASE WHEN time_created > $MONTH_CUTOFF THEN COALESCE(json_extract(data,'\$.cost'),0) ELSE 0 END),4) AS costMonth,
+            ROUND(SUM(CASE WHEN time_created > $CUTOFF THEN COALESCE(json_extract(data,'\$.cost'),0) ELSE 0 END),4) AS costWeek
      FROM $USAGE_TABLE
      WHERE $PROVIDER_PATH IS NOT NULL
        AND $PROVIDER_PATH != ''
@@ -212,17 +211,20 @@ provider_rows() {
             OR COALESCE($TOKENS_EXPR,0) > 0
             OR COALESCE(json_extract(data,'\$.cost'),0) > 0)
        $EXTRA_WHERE
-     GROUP BY 1 ORDER BY 5 DESC LIMIT $PROVIDER_ROW_LIMIT;" 2>/dev/null || true
+     GROUP BY 1 ORDER BY 5 DESC LIMIT $PROVIDER_ROW_LIMIT;" 2>/dev/null) || out='[]'
+  [[ -n $out ]] || out='[]'
+  printf '%s' "$out"
 }
 
 model_rows() {
-  [[ -r $DB ]] || return
-  "$SQLITE3" -readonly -cmd ".timeout 3000" "file:$DB?mode=ro" \
-    "SELECT $PROVIDER_PATH,
-            $MODEL_PATH,
-            date(time_created/1000,'unixepoch','localtime'),
-            ROUND(SUM(COALESCE($TOKENS_EXPR,0))),
-            ROUND(SUM(COALESCE(json_extract(data,'\$.cost'),0)),4)
+  local out
+  [[ -r $DB ]] || { echo '[]'; return; }
+  out=$("$SQLITE3" -readonly -cmd ".timeout 3000" -json "file:$DB?mode=ro" \
+    "SELECT $PROVIDER_PATH AS provider,
+            $MODEL_PATH AS model,
+            date(time_created/1000,'unixepoch','localtime') AS date,
+            ROUND(SUM(COALESCE($TOKENS_EXPR,0))) AS tokens,
+            ROUND(SUM(COALESCE(json_extract(data,'\$.cost'),0)),4) AS cost
      FROM $USAGE_TABLE
      WHERE time_created > $CUTOFF
        AND $PROVIDER_PATH IS NOT NULL
@@ -231,24 +233,15 @@ model_rows() {
             OR COALESCE($TOKENS_EXPR,0) > 0
             OR COALESCE(json_extract(data,'\$.cost'),0) > 0)
        $EXTRA_WHERE
-     GROUP BY 1,2,3 ORDER BY 4 DESC LIMIT $MODEL_ROW_LIMIT;" 2>/dev/null || true
+     GROUP BY 1,2,3 ORDER BY 4 DESC LIMIT $MODEL_ROW_LIMIT;" 2>/dev/null) || out='[]'
+  [[ -n $out ]] || out='[]'
+  printf '%s' "$out"
 }
 
-providers='[]'
-while IFS='|' read -r pid mo wk mc wc; do
-  [[ -n $pid ]] || continue
-  providers=$("$JQ" -c --arg id "$pid" --argjson mo "${mo:-0}" --argjson wk "${wk:-0}" \
-    --argjson mc "${mc:-0}" --argjson wc "${wc:-0}" \
-    '. + [{pid:$id,tokensWeek:$wk,tokensMonth:$mo,costWeek:$wc,costMonth:$mc,hasKey:false}]' <<<"$providers")
-done < <(provider_rows)
+provider_data=$(provider_rows)
+model_data=$(model_rows)
 
-rows='[]'
-while IFS='|' read -r pid mid d t c; do
-  [[ -n $pid ]] || continue
-  rows=$("$JQ" -c --arg p "$pid" --arg m "$mid" --arg d "$d" \
-    --argjson t "${t:-0}" --argjson c "${c:-0}" \
-    '. + [{provider:$p,model:$m,date:$d,tokens:$t,cost:$c}]' <<<"$rows")
-done < <(model_rows)
+providers=$("$JQ" -c '[.[] | {pid, tokensWeek, tokensMonth, costWeek, costMonth, hasKey:false}]' <<<"$provider_data")
 
 models_map=$("$JQ" -c '
   group_by(.provider) | map(
@@ -265,36 +258,39 @@ models_map=$("$JQ" -c '
     }
     }
   ) | from_entries
-' <<<"$rows")
+' <<<"$model_data")
 
-providers=$("$JQ" -c --argjson keys "$legacy_keys" --argjson hasOAuth "$has_oauth" \
-  'map(.hasKey = ((($hasOAuth == 1) and (.pid == "opencode" or .pid == "opencode-go"))
-                  or (.pid as $id | any($keys[]; . == $id))))' <<<"$providers")
-providers=$("$JQ" -c --argjson models "$models_map" \
-  'map(.modelList = ($models[.pid].modelList // []))' <<<"$providers")
+providers=$(printf '%s\n%s\n%s\n%s\n' "$providers" "$models_map" "$legacy_keys" "$has_oauth" |
+  "$JQ" -sc '
+    .[0] as $providers
+    | .[1] as $models
+    | .[2] as $keys
+    | .[3] as $hasOAuth
+    | $providers
+    | map(.hasKey = ((($hasOAuth == 1) and (.pid == "opencode" or .pid == "opencode-go"))
+                    or (.pid as $id | any($keys[]; . == $id))))
+    | map(.modelList = ($models[.pid].modelList // []))
+  ')
 
 gojson=$(collect_go "$go_key" "$go_hint")
 
 recent='[]'
 if [[ -r $DB ]]; then
-  while IFS='|' read -r d t c; do
-    [[ -n $d ]] || continue
-    recent=$("$JQ" -c --arg d "$d" --argjson t "${t:-0}" --argjson c "${c:-0}" \
-      '. + [{date:$d,tokens:$t,cost:$c}]' <<<"$recent")
-  done < <("$SQLITE3" -readonly -cmd ".timeout 3000" "file:$DB?mode=ro" \
+  recent=$("$SQLITE3" -readonly -cmd ".timeout 3000" -json "file:$DB?mode=ro" \
     "WITH RECURSIVE days(d) AS (
        SELECT date('now','localtime','-6 days')
        UNION ALL
        SELECT date(d,'+1 day') FROM days WHERE d < date('now','localtime')
      )
-     SELECT days.d,
-       ROUND(COALESCE(SUM(COALESCE($TOKENS_EXPR,0)),0)),
-       ROUND(COALESCE(SUM(COALESCE(json_extract(data,'\$.cost'),0)),0),4)
+     SELECT days.d AS date,
+       ROUND(COALESCE(SUM(COALESCE($TOKENS_EXPR,0)),0)) AS tokens,
+       ROUND(COALESCE(SUM(COALESCE(json_extract(data,'\$.cost'),0)),0),4) AS cost
      FROM days LEFT JOIN $USAGE_TABLE
        ON date($USAGE_TABLE.time_created/1000,'unixepoch','localtime') = days.d
       AND $PROVIDER_PATH IS NOT NULL
       AND $PROVIDER_PATH != '' $EXTRA_WHERE
-     GROUP BY days.d ORDER BY 1;" 2>/dev/null || true)
+     GROUP BY days.d ORDER BY 1;" 2>/dev/null) || recent='[]'
+  [[ -n $recent ]] || recent='[]'
 fi
 if [[ -z $recent || $recent == '[]' ]]; then
   # No database/table yet (fresh install): same 7-day shape, all zeros.
@@ -304,9 +300,13 @@ if [[ -z $recent || $recent == '[]' ]]; then
   done
 fi
 
-final=$("$JQ" -cn --argjson providers "$providers" --argjson go "$gojson" \
-  --argjson recentDays "$recent" \
-  '{status:"ok",providers:$providers,go:$go,recentDays:$recentDays,updatedAt:(now|todateiso8601)}')
+final=$(printf '%s\n%s\n%s\n' "$providers" "$gojson" "$recent" |
+  "$JQ" -sc '
+    .[0] as $providers
+    | .[1] as $go
+    | .[2] as $recentDays
+    | {status:"ok",providers:$providers,go:$go,recentDays:$recentDays,updatedAt:(now|todateiso8601)}
+  ')
 size=$(printf '%s' "$final" | "$WC" -c)
 if (( size > COLLECTOR_MAX_BYTES )); then
   echo "collector.sh: output exceeds $COLLECTOR_MAX_BYTES bytes" >&2
