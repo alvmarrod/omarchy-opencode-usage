@@ -345,72 +345,101 @@ Panel {
             fontFamily: root.fontFamily
           }
 
-          Canvas {
-            id: spark
+          Item {
+            id: chart
             visible: service.providers.length > 0
             width: parent.width
             height: Style.space(72)
-            antialiasing: true
-            property var values: service.recentDays.map(function(day) { return Model.dayTokens(day) })
-            property int peak: Model.recentPeak(service.recentDays)
-            onValuesChanged: requestPaint()
-            onPeakChanged: requestPaint()
-            onWidthChanged: requestPaint()
-            onHeightChanged: requestPaint()
-            onPaint: {
-              var ctx = getContext("2d")
-              ctx.clearRect(0, 0, width, height)
-              var vals = values || []
-              var n = vals.length
-              if (n === 0) return
-              var top = Math.max(1, spark.peak)
-              var pad = Style.space(8)
-              var base = height - Style.space(4)
-              function px(i) { return n === 1 ? width / 2 : pad + i * (width - 2 * pad) / (n - 1) }
-              function py(v) { return base - Style.space(4) - (v / top) * (base - 2 * pad) }
-              ctx.beginPath()
-              ctx.moveTo(px(0), py(vals[0]))
-              for (var i = 1; i < n; i++) {
-                var mx = (px(i - 1) + px(i)) / 2
-                var my = (py(vals[i - 1]) + py(vals[i])) / 2
-                ctx.quadraticCurveTo(px(i - 1), py(vals[i - 1]), mx, my)
-              }
-              ctx.lineTo(px(n - 1), py(vals[n - 1]))
-              var fill = ctx.createLinearGradient(0, 0, 0, base)
-              var fc = root.foreground
-              fill.addColorStop(0, Qt.rgba(fc.r, fc.g, fc.b, 0.30))
-              fill.addColorStop(1, Qt.rgba(fc.r, fc.g, fc.b, 0.0))
-              ctx.save()
-              ctx.lineTo(px(n - 1), base)
-              ctx.lineTo(px(0), base)
-              ctx.closePath()
-              ctx.fillStyle = fill
-              ctx.fill()
-              ctx.restore()
-              ctx.beginPath()
-              ctx.moveTo(px(0), py(vals[0]))
-              for (var j = 1; j < n; j++) {
-                var nx = (px(j - 1) + px(j)) / 2
-                var ny = (py(vals[j - 1]) + py(vals[j])) / 2
-                ctx.quadraticCurveTo(px(j - 1), py(vals[j - 1]), nx, ny)
-              }
-              ctx.lineTo(px(n - 1), py(vals[n - 1]))
-              ctx.lineWidth = 2
-              ctx.strokeStyle = Qt.rgba(fc.r, fc.g, fc.b, 1)
-              ctx.stroke()
-              var peakIdx = 0
-              for (var k = 1; k < n; k++) if (vals[k] > vals[peakIdx]) peakIdx = k
-              for (var m = 0; m < n; m++) {
+            readonly property int peak: Model.recentPeak(service.recentDays)
+            readonly property real topPad: Style.space(20)
+            readonly property real bottomPad: Style.space(4)
+            readonly property real base: height - bottomPad
+            readonly property real peakY: topPad
+            readonly property color peakColor: root.alarming ? root.urgent : Color.accent
+
+            Canvas {
+              id: spark
+              anchors.fill: parent
+              antialiasing: true
+              property var values: service.recentDays.map(function(day) { return Model.dayTokens(day) })
+              property int peak: chart.peak
+              onValuesChanged: requestPaint()
+              onPeakChanged: requestPaint()
+              onWidthChanged: requestPaint()
+              onHeightChanged: requestPaint()
+              onPaint: {
+                var ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+                var vals = values || []
+                var n = vals.length
+                if (n === 0) return
+                var top = Math.max(1, spark.peak)
+                var pad = Style.space(8)
+                var base = chart.base
+                var plotTop = chart.topPad
+                function px(i) { return n === 1 ? width / 2 : pad + i * (width - 2 * pad) / (n - 1) }
+                function py(v) { return base - (v / top) * (base - plotTop) }
                 ctx.beginPath()
-                if (m === peakIdx && spark.peak > 0) {
-                  ctx.arc(px(m), py(vals[m]), 4, 0, 2 * Math.PI)
-                  ctx.fillStyle = root.alarming ? Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 1) : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 1)
-                } else {
+                ctx.moveTo(px(0), py(vals[0]))
+                for (var i = 1; i < n; i++) {
+                  var mx = (px(i - 1) + px(i)) / 2
+                  var my = (py(vals[i - 1]) + py(vals[i])) / 2
+                  ctx.quadraticCurveTo(px(i - 1), py(vals[i - 1]), mx, my)
+                }
+                ctx.lineTo(px(n - 1), py(vals[n - 1]))
+                var fill = ctx.createLinearGradient(0, 0, 0, base)
+                var fc = root.foreground
+                fill.addColorStop(0, Qt.rgba(fc.r, fc.g, fc.b, 0.30))
+                fill.addColorStop(1, Qt.rgba(fc.r, fc.g, fc.b, 0.0))
+                ctx.save()
+                ctx.lineTo(px(n - 1), base)
+                ctx.lineTo(px(0), base)
+                ctx.closePath()
+                ctx.fillStyle = fill
+                ctx.fill()
+                ctx.restore()
+                ctx.beginPath()
+                ctx.moveTo(px(0), py(vals[0]))
+                for (var j = 1; j < n; j++) {
+                  var nx = (px(j - 1) + px(j)) / 2
+                  var ny = (py(vals[j - 1]) + py(vals[j])) / 2
+                  ctx.quadraticCurveTo(px(j - 1), py(vals[j - 1]), nx, ny)
+                }
+                ctx.lineTo(px(n - 1), py(vals[n - 1]))
+                ctx.lineWidth = 2
+                ctx.strokeStyle = Qt.rgba(fc.r, fc.g, fc.b, 1)
+                ctx.stroke()
+                if (spark.peak > 0) {
+                  ctx.save()
+                  ctx.strokeStyle = Qt.rgba(chart.peakColor.r, chart.peakColor.g, chart.peakColor.b, 0.9)
+                  ctx.lineWidth = 1
+                  for (var x = pad; x < width - pad; x += 8) {
+                    ctx.beginPath()
+                    ctx.moveTo(x, chart.peakY)
+                    ctx.lineTo(Math.min(x + 4, width - pad), chart.peakY)
+                    ctx.stroke()
+                  }
+                  ctx.restore()
+                }
+                for (var m = 0; m < n; m++) {
+                  ctx.beginPath()
                   ctx.arc(px(m), py(vals[m]), 2.5, 0, 2 * Math.PI)
                   ctx.fillStyle = Qt.rgba(fc.r, fc.g, fc.b, 0.85)
+                  ctx.fill()
                 }
-                ctx.fill()
               }
+            }
+
+            Text {
+              visible: chart.peak > 0
+              anchors.right: parent.right
+              anchors.rightMargin: Style.space(8)
+              y: chart.peakY - implicitHeight - Style.space(2)
+              text: "peak usage"
+              color: chart.peakColor
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              elide: Text.ElideRight
             }
           }
 
