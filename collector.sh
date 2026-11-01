@@ -207,7 +207,11 @@ provider_rows() {
             ROUND(SUM(CASE WHEN time_created > $CUTOFF THEN COALESCE(json_extract(data,'\$.cost'),0) ELSE 0 END),4)
      FROM $USAGE_TABLE
      WHERE $PROVIDER_PATH IS NOT NULL
-       AND $PROVIDER_PATH != '' $EXTRA_WHERE
+       AND $PROVIDER_PATH != ''
+       AND (json_extract(data,'\$.error') IS NULL
+            OR COALESCE($TOKENS_EXPR,0) > 0
+            OR COALESCE(json_extract(data,'\$.cost'),0) > 0)
+       $EXTRA_WHERE
      GROUP BY 1 ORDER BY 5 DESC LIMIT $PROVIDER_ROW_LIMIT;" 2>/dev/null || true
 }
 
@@ -222,7 +226,11 @@ model_rows() {
      FROM $USAGE_TABLE
      WHERE time_created > $CUTOFF
        AND $PROVIDER_PATH IS NOT NULL
-       AND $PROVIDER_PATH != '' $EXTRA_WHERE
+       AND $PROVIDER_PATH != ''
+       AND (json_extract(data,'\$.error') IS NULL
+            OR COALESCE($TOKENS_EXPR,0) > 0
+            OR COALESCE(json_extract(data,'\$.cost'),0) > 0)
+       $EXTRA_WHERE
      GROUP BY 1,2,3 ORDER BY 4 DESC LIMIT $MODEL_ROW_LIMIT;" 2>/dev/null || true
 }
 
