@@ -18,6 +18,8 @@ Panel {
   readonly property color urgent: bar ? bar.urgent : Color.urgent
   // No green in the shell palette, so the healthy state carries its own.
   readonly property color ok: "#6fbf73"
+  // No warning role in the shell palette; yellow marks the pace indicator.
+  readonly property color warning: "#d8a657"
   readonly property color dim: Qt.darker(foreground, 1.35)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property bool alarming: service.go ? Model.behindPace(
@@ -800,6 +802,12 @@ Panel {
             tint: windowRow.isBehind ? root.urgent : Color.accent
           }
 
+          Pill {
+            visible: modelData.key === "weekly" && !!windowRow.w
+            text: Model.paceText(windowRow.w, root.nowMs)
+            tint: windowRow.isBehind ? root.urgent : root.warning
+          }
+
           Item { Layout.fillWidth: true }
 
           Text {
@@ -850,25 +858,13 @@ Panel {
           }
         }
 
-        Row {
+        Text {
           width: parent.width
-          spacing: Style.space(8)
-
-          Text {
-            visible: !!windowRow.w
-            text: windowRow.w ? "resets " + Model.countdown(windowRow.w.resetMs, root.nowMs) : ""
-            color: root.dim
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-          }
-
-          Item { width: Style.space(1); height: 1 }
-
-          Pill {
-            visible: modelData.key === "weekly" && !!windowRow.w
-            text: Model.paceText(windowRow.w, root.nowMs)
-            tint: windowRow.isBehind ? root.urgent : root.foreground
-          }
+          visible: !!windowRow.w
+          text: windowRow.w ? "resets " + Model.countdown(windowRow.w.resetMs, root.nowMs) : ""
+          color: root.dim
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
         }
       }
     }
