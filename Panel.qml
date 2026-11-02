@@ -375,37 +375,40 @@ Panel {
                 if (n === 0) return
                 var top = Math.max(1, spark.peak)
                 var pad = Style.space(8)
+                var gap = Style.space(4)
+                var colW = n === 1 ? width : (width - gap * (n - 1)) / n
                 var base = chart.base
                 var plotTop = chart.topPad
-                function px(i) { return n === 1 ? width / 2 : pad + i * (width - 2 * pad) / (n - 1) }
+                function px(i) { return n === 1 ? width / 2 : colW / 2 + i * (colW + gap) }
                 function py(v) { return base - (v / top) * (base - plotTop) }
-                ctx.beginPath()
-                ctx.moveTo(px(0), py(vals[0]))
-                for (var i = 1; i < n; i++) {
-                  var mx = (px(i - 1) + px(i)) / 2
-                  var my = (py(vals[i - 1]) + py(vals[i])) / 2
-                  ctx.quadraticCurveTo(px(i - 1), py(vals[i - 1]), mx, my)
+                function tracePath() {
+                  ctx.beginPath()
+                  ctx.moveTo(px(0), py(vals[0]))
+                  if (n < 2) return
+                  for (var i = 0; i < n - 1; i++) {
+                    var i0 = Math.max(0, i - 1)
+                    var i3 = Math.min(n - 1, i + 2)
+                    var p0x = px(i0), p0y = py(vals[i0])
+                    var p1x = px(i), p1y = py(vals[i])
+                    var p2x = px(i + 1), p2y = py(vals[i + 1])
+                    var p3x = px(i3), p3y = py(vals[i3])
+                    ctx.bezierCurveTo(
+                      p1x + (p2x - p0x) / 6, p1y + (p2y - p0y) / 6,
+                      p2x - (p3x - p1x) / 6, p2y - (p3y - p1y) / 6,
+                      p2x, p2y)
+                  }
                 }
-                ctx.lineTo(px(n - 1), py(vals[n - 1]))
                 var fill = ctx.createLinearGradient(0, 0, 0, base)
                 var fc = root.foreground
                 fill.addColorStop(0, Qt.rgba(fc.r, fc.g, fc.b, 0.30))
                 fill.addColorStop(1, Qt.rgba(fc.r, fc.g, fc.b, 0.0))
-                ctx.save()
+                tracePath()
                 ctx.lineTo(px(n - 1), base)
                 ctx.lineTo(px(0), base)
                 ctx.closePath()
                 ctx.fillStyle = fill
                 ctx.fill()
-                ctx.restore()
-                ctx.beginPath()
-                ctx.moveTo(px(0), py(vals[0]))
-                for (var j = 1; j < n; j++) {
-                  var nx = (px(j - 1) + px(j)) / 2
-                  var ny = (py(vals[j - 1]) + py(vals[j])) / 2
-                  ctx.quadraticCurveTo(px(j - 1), py(vals[j - 1]), nx, ny)
-                }
-                ctx.lineTo(px(n - 1), py(vals[n - 1]))
+                tracePath()
                 ctx.lineWidth = 2
                 ctx.strokeStyle = Qt.rgba(fc.r, fc.g, fc.b, 1)
                 ctx.stroke()
@@ -423,8 +426,8 @@ Panel {
                 }
                 for (var m = 0; m < n; m++) {
                   ctx.beginPath()
-                  ctx.arc(px(m), py(vals[m]), 2.5, 0, 2 * Math.PI)
-                  ctx.fillStyle = Qt.rgba(fc.r, fc.g, fc.b, 0.85)
+                  ctx.arc(px(m), py(vals[m]), 3, 0, 2 * Math.PI)
+                  ctx.fillStyle = Qt.rgba(fc.r, fc.g, fc.b, 0.9)
                   ctx.fill()
                 }
               }
