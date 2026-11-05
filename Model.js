@@ -173,6 +173,22 @@ function weekCost(providers) {
   return total
 }
 
+// Summary cards: token, cost, and distinct-model totals for one window.
+function rangeSummary(providers, range) {
+  var tokensKey = range === "5h" ? "tokens5h" : range === "1m" ? "tokensMonth" : "tokensWeek"
+  var costKey = range === "5h" ? "cost5h" : range === "1m" ? "costMonth" : "costWeek"
+  var modelsKey = range === "5h" ? "models5h" : range === "1m" ? "modelsMonth" : "modelsWeek"
+  var list = (providers && providers.length > 0) ? providers : []
+  var total = { tokens: 0, cost: 0, models: 0 }
+  for (var i = 0; i < list.length; i++) {
+    var provider = list[i]
+    total.tokens += Math.max(0, number(provider && provider[tokensKey], 0))
+    total.cost += Math.max(0, number(provider && provider[costKey], 0))
+    total.models += Math.max(0, number(provider && provider[modelsKey], 0))
+  }
+  return total
+}
+
 function recentTotal(days) {
   var list = (days && days.length > 0) ? days : []
   var total = 0
@@ -225,6 +241,7 @@ var exportsObject = {
   datesOf: datesOf,
   weekTotal: weekTotal,
   weekCost: weekCost,
+  rangeSummary: rangeSummary,
   recentTotal: recentTotal,
   recentPeak: recentPeak,
   todayTokens: todayTokens,

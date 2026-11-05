@@ -1,9 +1,9 @@
 # omarchy-opencode-usage
 
-OpenCode usage widget for the Omarchy shell (Quickshell): token and cost
-usage per configured provider (Zen, Go, Bedrock, ...) from OpenCode, daily
-per-model breakdowns for the last 7 days, and OpenCode Go limit windows via
-the go/v1/usage API.
+OpenCode usage widget for the Omarchy shell (Quickshell): 5H/7D/1M token,
+cost, and model summaries, usage per configured provider (Zen, Go, Bedrock,
+...), daily per-model breakdowns for the last 7 days, and OpenCode Go limit
+windows via the go/v1/usage API.
 
 Plugin ID: `io.github.alvmarrod.opencode-usage`
 

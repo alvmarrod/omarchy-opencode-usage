@@ -13,6 +13,12 @@ Panel {
 
   property double nowMs: Date.now()
   property string expandedProviderId: ""
+  // Summary-card window. Persisted in the widget's inline shell.json entry.
+  readonly property string range: {
+    var raw = settings ? String(settings["range"] || "") : ""
+    return raw === "5h" || raw === "1m" ? raw : "7d"
+  }
+  readonly property var rangeStats: Model.rangeSummary(service.providers, root.range)
   readonly property int dayCount: Math.max(1, service.recentDays.length)
   readonly property color foreground: bar ? bar.barForeground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
@@ -38,19 +44,10 @@ Panel {
   // Green dot: tokens flowed today and nothing is wrong. Stays grey while
   // idle (fresh install, error, still loading, or nothing used today).
   readonly property bool healthy: !root.alerting && Model.todayTokens(service.recentDays) > 0
-  readonly property int modelCount: {
-    var total = 0
-    var list = service.providers || []
-    for (var i = 0; i < list.length; i++) {
-      var models = list[i] && list[i].modelList
-      if (models) total += models.length
-    }
-    return total
-  }
   readonly property var statTiles: [
-    { value: Model.tokenCount(Model.weekTotal(service.providers)), label: "TOKENS · 7D" },
-    { value: Model.dollars(Model.weekCost(service.providers)), label: "COST · 7D" },
-    { value: String(root.modelCount), label: root.modelCount === 1 ? "MODEL" : "MODELS" }
+    { value: Model.tokenCount(root.rangeStats.tokens), label: "TOKENS" },
+    { value: Model.dollars(root.rangeStats.cost), label: "COST" },
+    { value: String(root.rangeStats.models), label: root.rangeStats.models === 1 ? "MODEL" : "MODELS" }
   ]
 
   implicitWidth: button.implicitWidth
@@ -59,6 +56,18 @@ Panel {
   function refresh() {
     nowMs = Date.now()
     service.refresh()
+  }
+
+  function persistRange(value) {
+    if (value !== "5h" && value !== "7d" && value !== "1m") return
+    if (value === root.range) return
+    var entry = { id: root.moduleName }
+    for (var key in root.settings) if (key !== "id") entry[key] = root.settings[key]
+    entry.range = value
+    // Applied locally first so the cards redraw on the click itself.
+    root.settings = entry
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
   }
 
   onOpenedChanged: if (opened) {
@@ -225,31 +234,47 @@ Panel {
             }
           }
 
-          Row {
+          RowLayout {
             id: tilesRow
             visible: service.providers.length > 0
             width: parent.width
             spacing: Style.space(8)
+
+            ButtonGroup {
+              Layout.alignment: Qt.AlignVCenter
+              options: [
+                { value: "5h", label: "5H" },
+                { value: "7d", label: "7D" },
+                { value: "1m", label: "1M" }
+              ]
+              value: root.range
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              onChanged: function(value) { root.persistRange(value) }
+            }
 
             Repeater {
               model: root.statTiles
 
               delegate: Rectangle {
                 required property var modelData
-                width: (tilesRow.width - Style.space(16)) / 3
-                implicitHeight: tileCol.implicitHeight + Style.space(16)
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+                implicitHeight: tileLine.implicitHeight + Style.space(16)
                 radius: Style.space(10)
                 color: Style.normalFill
 
-                Column {
-                  id: tileCol
+                RowLayout {
+                  id: tileLine
                   width: parent.width - Style.space(16)
                   anchors.horizontalCenter: parent.horizontalCenter
                   y: Style.space(8)
-                  spacing: Style.space(2)
+                  spacing: Style.space(6)
 
                   Text {
-                    width: parent.width
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     text: modelData.value
                     color: root.foreground
                     font.family: root.fontFamily
@@ -259,13 +284,12 @@ Panel {
                   }
 
                   Text {
-                    width: parent.width
+                    Layout.alignment: Qt.AlignRight
                     text: modelData.label
                     color: root.dim
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
                     font.bold: true
-                    elide: Text.ElideRight
                   }
                 }
               }

@@ -79,6 +79,8 @@ if [[ "${COLLECTOR_PG_LEADER:-}" == "1" ]]; then
 fi
 
 NOW_MS=$(( $("$DATE" +%s) * 1000 ))
+# The 5H summary card is a rolling window; week/month stay calendar-aligned.
+ROLLING_CUTOFF=$(( NOW_MS - 5 * 60 * 60 * 1000 ))
 # Align the week/month windows with the 7/30 calendar-day series used by the
 # panel (and by `opencode stats --days 7/30`), instead of rolling 7x24h.
 WEEK_START_DATE=$("$DATE" -d '-6 days' +%F)
@@ -200,10 +202,15 @@ provider_rows() {
   [[ -r $DB ]] || { echo '[]'; return; }
   out=$("$SQLITE3" -readonly -cmd ".timeout 3000" -json "file:$DB?mode=ro" \
     "SELECT $PROVIDER_PATH AS pid,
+            ROUND(SUM(CASE WHEN time_created > $ROLLING_CUTOFF THEN COALESCE($TOKENS_EXPR,0) ELSE 0 END)) AS tokens5h,
             ROUND(SUM(CASE WHEN time_created > $MONTH_CUTOFF THEN COALESCE($TOKENS_EXPR,0) ELSE 0 END)) AS tokensMonth,
             ROUND(SUM(CASE WHEN time_created > $CUTOFF THEN COALESCE($TOKENS_EXPR,0) ELSE 0 END)) AS tokensWeek,
+            ROUND(SUM(CASE WHEN time_created > $ROLLING_CUTOFF THEN COALESCE(json_extract(data,'\$.cost'),0) ELSE 0 END),4) AS cost5h,
             ROUND(SUM(CASE WHEN time_created > $MONTH_CUTOFF THEN COALESCE(json_extract(data,'\$.cost'),0) ELSE 0 END),4) AS costMonth,
-            ROUND(SUM(CASE WHEN time_created > $CUTOFF THEN COALESCE(json_extract(data,'\$.cost'),0) ELSE 0 END),4) AS costWeek
+            ROUND(SUM(CASE WHEN time_created > $CUTOFF THEN COALESCE(json_extract(data,'\$.cost'),0) ELSE 0 END),4) AS costWeek,
+            COUNT(DISTINCT CASE WHEN time_created > $ROLLING_CUTOFF THEN $MODEL_PATH END) AS models5h,
+            COUNT(DISTINCT CASE WHEN time_created > $CUTOFF THEN $MODEL_PATH END) AS modelsWeek,
+            COUNT(DISTINCT CASE WHEN time_created > $MONTH_CUTOFF THEN $MODEL_PATH END) AS modelsMonth
      FROM $USAGE_TABLE
      WHERE $PROVIDER_PATH IS NOT NULL
        AND $PROVIDER_PATH != ''
@@ -211,7 +218,7 @@ provider_rows() {
             OR COALESCE($TOKENS_EXPR,0) > 0
             OR COALESCE(json_extract(data,'\$.cost'),0) > 0)
        $EXTRA_WHERE
-     GROUP BY 1 ORDER BY 5 DESC LIMIT $PROVIDER_ROW_LIMIT;" 2>/dev/null) || out='[]'
+     GROUP BY 1 ORDER BY costWeek DESC LIMIT $PROVIDER_ROW_LIMIT;" 2>/dev/null) || out='[]'
   [[ -n $out ]] || out='[]'
   printf '%s' "$out"
 }
@@ -241,7 +248,7 @@ model_rows() {
 provider_data=$(provider_rows)
 model_data=$(model_rows)
 
-providers=$("$JQ" -c '[.[] | {pid, tokensWeek, tokensMonth, costWeek, costMonth, hasKey:false}]' <<<"$provider_data")
+providers=$("$JQ" -c '[.[] | {pid, tokens5h, tokensWeek, tokensMonth, cost5h, costWeek, costMonth, models5h, modelsWeek, modelsMonth, hasKey:false}]' <<<"$provider_data")
 
 models_map=$("$JQ" -c '
   group_by(.provider) | map(
